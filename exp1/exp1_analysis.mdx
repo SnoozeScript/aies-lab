@@ -1,0 +1,85 @@
+---
+title: "Experiment 1: Fairness in Income Prediction"
+description: "Analysis of gender bias and fairness mitigation in income prediction using the Adult dataset."
+---
+
+# Experiment 1: Fairness in Income Prediction
+
+## Overview
+This experiment investigates gender bias in income prediction using the Adult Income dataset. A logistic regression model is trained, and its fairness is evaluated using selection rates by gender. The experiment also demonstrates how to mitigate bias using Fairlearn’s Exponentiated Gradient method.
+
+## Steps
+
+### 1. Load and Preprocess Data
+```python
+import pandas as pd
+data = pd.read_csv("adult.csv")
+data = data[['age', 'educational-num', 'hours-per-week', 'gender', 'income']]
+data = pd.get_dummies(data, drop_first=True)
+```
+
+### 2. Train Logistic Regression Model
+```python
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+
+X = data.drop('income_>50K', axis=1)
+y = data['income_>50K']
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+model = LogisticRegression(max_iter=1000)
+model.fit(X_train, y_train)
+y_pred = model.predict(X_test)
+```
+
+### 3. Fairness Evaluation
+```python
+from fairlearn.metrics import MetricFrame, selection_rate
+sex = X_test['gender_Male']
+metric_frame = MetricFrame(metrics=selection_rate, y_true=y_test, y_pred=y_pred, sensitive_features=sex)
+print("Selection Rates by Gender:\n", metric_frame.by_group)
+```
+
+**Result:**
+- Female: 1.3% predicted to earn >50K
+- Male: 20.1% predicted to earn >50K
+
+> This shows strong gender bias: the model is much more likely to predict high income for men.
+
+### 4. Visualize Bias
+```python
+import matplotlib.pyplot as plt
+selection_rates = {'Female': 0.013193, 'Male': 0.200775}
+# ...plotting code...
+```
+
+### 5. Mitigate Bias with Fairlearn
+```python
+from fairlearn.reductions import ExponentiatedGradient, DemographicParity
+
+sensitive_feature = X['gender_Male']
+X_train, X_test, y_train, y_test, sf_train, sf_test = train_test_split(
+    X, y, sensitive_feature, test_size=0.3, random_state=42
+)
+estimator = LogisticRegression(max_iter=1000)
+fair_model = ExponentiatedGradient(estimator, constraints=DemographicParity(), eps=0.01)
+fair_model.fit(X_train, y_train, sensitive_features=sf_train)
+y_pred = fair_model.predict(X_test)
+metric_frame = MetricFrame(
+    metrics={"Selection Rate": selection_rate, "Accuracy": accuracy_score},
+    y_true=y_test, y_pred=y_pred, sensitive_features=sf_test
+)
+print(metric_frame.by_group)
+```
+
+**Result after mitigation:**
+- Selection Rate: 9.7% (females) vs 11.2% (males)
+- Accuracy: 86% (females), 75% (males)
+- Overall accuracy: ~78.7%
+
+## Interpretation
+
+- **Initial Model:** Strong gender bias, much higher selection rate for men.
+- **After Fairness Constraints:** Selection rates between genders are much closer, bias is reduced.
+- **Trade-off:** Slight drop in overall accuracy, but much fairer predictions.
+
+> This experiment demonstrates how fairness constraints can reduce bias in AI models, balancing ethical considerations with performance.
